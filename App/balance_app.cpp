@@ -56,12 +56,15 @@ namespace
 // 你当前的需求是：先在 balance_app 中只让一个电机转起来。
 // 这里选用 BAL_JOINT_L_0 对应的 g_motor_joint_0。
 // =====================================================
-static constexpr uint8_t k_demo_motor_rx_id = 0x00;
+static constexpr uint8_t k_demo_motor_rx_id = 0x01;
 static constexpr uint8_t k_demo_motor_tx_id = 0x01;
-static constexpr float k_demo_motor_target_vel = 2.0f;              // rad/s
+static constexpr float k_demo_motor_target_vel = 1.5f;              // rad/s
 static constexpr float k_demo_motor_target_kp = 0.0f;
 static constexpr float k_demo_motor_target_kd = 0.5f;
 static constexpr float k_demo_motor_target_tor = 0.0f;
+static constexpr uint32_t k_demo_forward_ms = 10000U;
+static constexpr uint32_t k_demo_reverse_ms = 10000U;
+static constexpr uint32_t k_demo_pause_ms = 250U;
 
 static int32_t BalanceApp_FloatToMilli(const float value)
 {
@@ -73,37 +76,30 @@ static int32_t BalanceApp_FloatToMilli(const float value)
     return static_cast<int32_t>(value * 1000.0f - 0.5f);
 }
 
-static float BalanceApp_UnwrapAngle(const float raw_angle)
+static float BalanceApp_GetDemoTargetVel(void)
 {
-    static bool s_unwrap_inited = false;
-    static float s_prev_raw_angle = 0.0f;
-    static int32_t s_round_count = 0;
+    const uint32_t cycle_ms = k_demo_forward_ms + k_demo_pause_ms +
+                              k_demo_reverse_ms + k_demo_pause_ms;
+    const uint32_t now_ms = static_cast<uint32_t>(xTaskGetTickCount()) *
+                            static_cast<uint32_t>(portTICK_PERIOD_MS);
+    const uint32_t phase_ms = now_ms % cycle_ms;
 
-    const float angle_max = g_motor_joint_0.Get_Angle_Max();
-    const float angle_span = angle_max * 2.0f;
-    const float wrap_threshold = angle_max * 0.8f;
-
-    if (!s_unwrap_inited)
+    if (phase_ms < k_demo_forward_ms)
     {
-        s_prev_raw_angle = raw_angle;
-        s_unwrap_inited = true;
-        return raw_angle;
+        return k_demo_motor_target_vel;
     }
 
-    const float delta = raw_angle - s_prev_raw_angle;
-
-    if (delta < -wrap_threshold)
+    if (phase_ms < (k_demo_forward_ms + k_demo_pause_ms))
     {
-        s_round_count++;
-    }
-    else if (delta > wrap_threshold)
-    {
-        s_round_count--;
+        return 0.0f;
     }
 
-    s_prev_raw_angle = raw_angle;
+    if (phase_ms < (k_demo_forward_ms + k_demo_pause_ms + k_demo_reverse_ms))
+    {
+        return -k_demo_motor_target_vel;
+    }
 
-    return raw_angle + static_cast<float>(s_round_count) * angle_span;
+    return 0.0f;
 }
 
 static void BalanceApp_ClearAllMotorCmd(void)
@@ -141,7 +137,7 @@ static void BalanceApp_SetSingleMotorDemoCmd(void)
     // kp = 0
     // kd = 小阻尼
     g_balance_robot.joint_motor_cmd[BAL_JOINT_L_0].pos = 0.0f;
-    g_balance_robot.joint_motor_cmd[BAL_JOINT_L_0].vel = k_demo_motor_target_vel;
+    g_balance_robot.joint_motor_cmd[BAL_JOINT_L_0].vel = BalanceApp_GetDemoTargetVel();
     g_balance_robot.joint_motor_cmd[BAL_JOINT_L_0].tor = k_demo_motor_target_tor;
     g_balance_robot.joint_motor_cmd[BAL_JOINT_L_0].kp = k_demo_motor_target_kp;
     g_balance_robot.joint_motor_cmd[BAL_JOINT_L_0].kd = k_demo_motor_target_kd;
@@ -298,6 +294,7 @@ static void vBalanceControlTask(void *pvParameters)
     for (;;)
     {
         BalanceMotorIf_UpdateFeedback(&g_balance_robot);                    // 将电机返回的数据保存
+        BalanceObserver_UpdateLeg(&g_balance_robot);
 
         if (g_balance_robot.enable && !g_balance_robot.safe)
         {
@@ -365,9 +362,8 @@ static void vBalanceDebugTask(void *pvParameters)
     for (;;)
     {
         const BalanceMotorFdb &fdb = g_balance_robot.joint_motor_fdb[BAL_JOINT_L_0];
-        const float cont_angle = BalanceApp_UnwrapAngle(fdb.pos);
         const int32_t raw_angle_milli = BalanceApp_FloatToMilli(fdb.pos);
-        const int32_t cont_angle_milli = BalanceApp_FloatToMilli(cont_angle);
+        const int32_t cont_angle_milli = BalanceApp_FloatToMilli(g_balance_robot.leg[0].joint.phi1);
         const int32_t vel_milli = BalanceApp_FloatToMilli(fdb.vel);
         const int32_t tor_milli = BalanceApp_FloatToMilli(fdb.tor);
         const int len = snprintf(uart7_tx_buf,

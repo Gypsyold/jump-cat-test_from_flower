@@ -40,6 +40,54 @@ namespace
 
         memset(leg, 0, sizeof(BalanceLegState));
     }
+    
+    static inline void BalanceAngleUnwrapReset(BalanceAngleUnwrap* unwrap)
+    {
+        if (unwrap == nullptr)
+        {
+            return;
+        }
+
+        unwrap->initialized = false;
+        unwrap->raw_last = 0.0f;
+        unwrap->continuous = 0.0f;
+    }
+
+    static inline float BalanceAngleUnwrapUpdate(BalanceAngleUnwrap* unwrap, float raw_now)
+    {
+        if (unwrap == nullptr)
+        {
+            return raw_now;
+        }
+
+        // 达妙当前位置反馈范围近似 [-12.5, 12.5]
+        constexpr float kHalfRange = 12.5f;
+        constexpr float kFullRange = 25.0f;
+
+        if (!unwrap->initialized)
+        {
+            unwrap->initialized = true;
+            unwrap->raw_last = raw_now;
+            unwrap->continuous = raw_now;
+            return unwrap->continuous;
+        }
+
+        float delta = raw_now - unwrap->raw_last;
+
+        if (delta > kHalfRange)
+        {
+            delta -= kFullRange;
+        }
+        else if (delta < -kHalfRange)
+        {
+            delta += kFullRange;
+        }
+
+        unwrap->continuous += delta;
+        unwrap->raw_last = raw_now;
+
+        return unwrap->continuous;
+    }
 }
 
 void BalanceObserver_Init(BalanceRobot* robot)
@@ -58,7 +106,12 @@ void BalanceObserver_Init(BalanceRobot* robot)
     robot->body.x_acc = 0.0f;
     robot->body.x_dot_obv = 0.0f;
     robot->body.x_acc_obv = 0.0f;
-
+    
+    for (int i = 0; i < BALANCE_JOINT_NUM; ++i)
+    {
+        BalanceAngleUnwrapReset(&robot->joint_angle_unwrap[i]);
+    }
+    
     for (int i = 0; i < BALANCE_LEG_NUM; ++i)
     {
         BalanceClearLeg(&robot->leg[i]);
@@ -131,27 +184,26 @@ void BalanceObserver_UpdateLeg(BalanceRobot* robot)
 
     // ----- 左腿 -----
     {
-        BalanceLegState& leg = robot->leg[0];               // 左腿
-        
-        // 数据来源是数据来源是 balance_motor_if.cpp
-        // 这里的代码其实就是将robot->joint_motor_fdb[BALANCE_JOINT_NUM]中的数据做个转移
-        // robot->joint_motor_fdb[BALANCE_JOINT_NUM]中的数据来源是 balance_motor_if.cpp
-        // 应该需要一个任务不断调用BalanceMotorIf_UpdateFeedback来更新数据
-        
-        // 先取关节反馈
-        leg.joint.phi1  = BalanceWrapPi(robot->joint_motor_fdb[BAL_JOINT_L_0].pos); // 左腿0号电机位置
-        leg.joint.phi4  = BalanceWrapPi(robot->joint_motor_fdb[BAL_JOINT_L_1].pos); // 左腿1号电机位置
-        leg.joint.dphi1 = robot->joint_motor_fdb[BAL_JOINT_L_0].vel;                // 左腿0号电机速度
-        leg.joint.dphi4 = robot->joint_motor_fdb[BAL_JOINT_L_1].vel;                // 左腿1号电机速度
-        leg.joint.t1    = robot->joint_motor_fdb[BAL_JOINT_L_0].tor;                // 左腿0号电机力矩
-        leg.joint.t2    = robot->joint_motor_fdb[BAL_JOINT_L_1].tor;                // 左腿1号电机力矩
+        BalanceLegState& leg = robot->leg[0];
 
-        leg.wheel_vel = robot->wheel_motor_fdb[BAL_WHEEL_L].vel;                    // 左轮速度
-        
-        // 下面是运动学公式
-        // 用于获得leg.rod.theta和leg.rod.dtheta
-        // 它们最后会作为robot->leg_state[i].theta 和 robot->leg_state[i].theta_dot
-        // 这样又补齐了LQR的theta和theta_dot
+        const float joint0_raw = robot->joint_motor_fdb[BAL_JOINT_L_0].pos;
+        const float joint1_raw = robot->joint_motor_fdb[BAL_JOINT_L_1].pos;
+
+        const float joint0_cont =
+            BalanceAngleUnwrapUpdate(&robot->joint_angle_unwrap[BAL_JOINT_L_0], joint0_raw);
+        const float joint1_cont =
+            BalanceAngleUnwrapUpdate(&robot->joint_angle_unwrap[BAL_JOINT_L_1], joint1_raw);
+
+        // 第一版：先不加零位偏置和方向修正
+        leg.joint.phi1  = joint0_cont;
+        leg.joint.phi4  = joint1_cont;
+
+        leg.joint.dphi1 = robot->joint_motor_fdb[BAL_JOINT_L_0].vel;
+        leg.joint.dphi4 = robot->joint_motor_fdb[BAL_JOINT_L_1].vel;
+        leg.joint.t1    = robot->joint_motor_fdb[BAL_JOINT_L_0].tor;
+        leg.joint.t2    = robot->joint_motor_fdb[BAL_JOINT_L_1].tor;
+
+        leg.wheel_vel = robot->wheel_motor_fdb[BAL_WHEEL_L].vel;
 
         float l0_phi0[2] = {0.0f, 0.0f};
         BalanceCalcL0Phi0(leg.joint.phi1, leg.joint.phi4, l0_phi0);
@@ -177,8 +229,18 @@ void BalanceObserver_UpdateLeg(BalanceRobot* robot)
     {
         BalanceLegState& leg = robot->leg[1];
 
-        leg.joint.phi1  = BalanceWrapPi(robot->joint_motor_fdb[BAL_JOINT_R_0].pos);
-        leg.joint.phi4  = BalanceWrapPi(robot->joint_motor_fdb[BAL_JOINT_R_1].pos);
+        const float joint0_raw = robot->joint_motor_fdb[BAL_JOINT_R_0].pos;
+        const float joint1_raw = robot->joint_motor_fdb[BAL_JOINT_R_1].pos;
+
+        const float joint0_cont =
+            BalanceAngleUnwrapUpdate(&robot->joint_angle_unwrap[BAL_JOINT_R_0], joint0_raw);
+        const float joint1_cont =
+            BalanceAngleUnwrapUpdate(&robot->joint_angle_unwrap[BAL_JOINT_R_1], joint1_raw);
+
+        // 第一版：先不加零位偏置和方向修正
+        leg.joint.phi1  = joint0_cont;
+        leg.joint.phi4  = joint1_cont;
+
         leg.joint.dphi1 = robot->joint_motor_fdb[BAL_JOINT_R_0].vel;
         leg.joint.dphi4 = robot->joint_motor_fdb[BAL_JOINT_R_1].vel;
         leg.joint.t1    = robot->joint_motor_fdb[BAL_JOINT_R_0].tor;

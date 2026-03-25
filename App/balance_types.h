@@ -129,6 +129,13 @@ typedef struct BalanceLegCmd
     float wheel_t;
 } BalanceLegCmd;
 
+typedef struct BalanceAngleUnwrap
+{
+    bool initialized;
+    float raw_last;
+    float continuous;
+} BalanceAngleUnwrap;
+
 // 整机对象
 typedef struct BalanceRobot
 {
@@ -137,7 +144,9 @@ typedef struct BalanceRobot
 
     BalanceMotorCmd joint_motor_cmd[BALANCE_JOINT_NUM];             //  关节电机的命令数组
     BalanceMotorCmd wheel_motor_cmd[BALANCE_WHEEL_NUM];             // 
-
+    
+    BalanceAngleUnwrap joint_angle_unwrap[BALANCE_JOINT_NUM];
+    
     BalanceImuData imu;                                             // 陀螺仪的数据
     BalanceBodyState body;                                          // 表示整个机体
     BalanceLegState leg[BALANCE_LEG_NUM];                           // 里面装了左腿和右腿
