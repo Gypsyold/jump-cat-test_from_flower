@@ -68,6 +68,8 @@ void Motor_DM_Test_Init(void)
 
 void Motor_DM_Test_Apply(void)
 {
+
+    
     static float g_target_kp_x  = 1.0f;     // kp值
     static float g_target_kd_x  = 0.5f;     // kd值
     static float g_target_pos_x = 0.0f;     // 设定的目标位置

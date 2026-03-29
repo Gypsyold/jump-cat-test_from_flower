@@ -40,6 +40,7 @@ extern "C"
 #include "jy61p_task.h"
 #include "vofa_task.h"
 #include "motor_dm_task.h"
+#include "set_angle_test_task.h"
 // #include "control_task.h"
   /* USER CODE END ET */
 
