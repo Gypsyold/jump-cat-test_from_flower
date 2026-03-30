@@ -8,58 +8,83 @@
 ## 项目简介介绍
 
 ```tex
-jump-cat-test_from_flower/
+JumpCat_Gimbal/
 │
-├── App/                          # 应用程序层
-├── Core/                         # 核心驱动层 (HAL/LL)
-├── Drivers/                      # 官方驱动库
-├── Middlewares/                  # 中间件 (FreeRTOS, USB等)
-├── USB_DEVICE/                   # USB设备相关
-├── User_Config/                  # 用户配置文件
-├── User_File/                    # 用户应用代码 (核心工作区)
-│   │
-│   ├── 1_Middleware/             # 中间件封装层
-│   │   └── (算法库、通信协议等)
-│   │
-│   ├── 2_Device/                 # 设备驱动层
-│   │   ├── dvc_jy61p.cpp/h       # JY61P姿态传感器驱动
-│   │   ├── dvc_vofa.cpp/h        # VOFA上位机协议驱动
-│   │   └── (电机驱动、WS2812等)
-│   │
-│   └── 4_Task/                   # FreeRTOS任务层 (你主要工作目录)
-│       │
-│       ├── ws2812_task.cpp/h     # RGB指示灯任务 (优先级最低)
-│       │
-│       ├── jy61p_task.cpp/h      # JY61P姿态采集任务
-│       │   ├── 读取IMU数据
-│       │   ├── 解析四元数/欧拉角
-│       │   └── 提供 Get_Current_Yaw/Pitch/Roll() 接口
-│       │
-│       ├── motor_dm_task.cpp/h   # 达妙电机通信任务
-│       │   ├── CAN/串口通信
-│       │   ├── MIT模式指令封装
-│       │   └── 提供 Motor_DM_Set_Speed() 接口
-│       │
-│       ├── vofa_task.cpp/h       # VOFA上位机调试任务 (已改造)
-│       │   ├── 50Hz发送IMU数据到上位机
-│       │   ├── 解析命令: yaw=90#, pitch=30#, roll=15#
-│       │   ├── 调用 Set_Target_Yaw/Pitch/Roll() 接口
-│       │   └── 保留 q00/r00 等调试命令
-│       │
-│       ├── set_angle_test_task.cpp/h # 设定角度测试任务 (核心控制)
-│       │   ├── 接收VOFA传来的目标角度
-│       │   ├── 读取JY61P当前角度
-│       │   ├── PID计算: 角度误差 → 目标速度 (rad/s)
-│       │   ├── 处理偏航轴±180°环绕
-│       │   └── 调用 Motor_DM_Set_Speed() 执行
-│       │
-│       ├── balance_test_task.cpp/h # 平衡测试任务 (备选/废弃)
-│       └── control_task.cpp/h      # 早期控制任务 (已废弃)
+├── .assets/                              # README资源文件
 │
-├── CMakeLists.txt               # CMake构建配置
-├── H7_test.ioc                  # STM32CubeMX配置
-├── startup_stm32h723xx.s        # 启动文件
-└── README.md                    # 项目说明
+├── FreeRTOS_Project/                     # STM32 + FreeRTOS 工程
+│   │
+│   ├── .vscode/                          # VS Code 配置
+│   ├── build/                            # 编译输出目录
+│   ├── cmake/                            # CMake 模块
+│   │
+│   ├── App/                              # 应用程序层
+│   ├── Core/                             # 核心驱动层 (HAL/LL)
+│   ├── Drivers/                          # 官方驱动库
+│   ├── Middlewares/                      # 中间件 (FreeRTOS, USB等)
+│   ├── USB_DEVICE/                       # USB设备相关
+│   ├── User_Config/                      # 用户配置文件
+│   │
+│   ├── User_File/                        # 用户应用代码 (核心工作区)
+│   │   │
+│   │   ├── 1_Middleware/                 # 中间件封装层
+│   │   │   │
+│   │   │   ├── mw_pid.cpp/h              # PID控制器封装
+│   │   │   ├── mw_filter.cpp/h           # 数字滤波器
+│   │   │   └── mw_math.cpp/h             # 数学工具函数
+│   │   │
+│   │   ├── 2_Device/                     # 设备驱动层
+│   │   │   │
+│   │   │   ├── dvc_jy61p.cpp/h           # JY61P姿态传感器驱动
+│   │   │   ├── dvc_vofa.cpp/h            # VOFA上位机协议驱动
+│   │   │   ├── dvc_motor_dm.cpp/h        # 达妙电机驱动 (CAN)
+│   │   │   ├── dvc_ws2812.cpp/h          # WS2812 RGB灯驱动
+│   │   │   
+│   │   │
+│   │   └── 4_Task/                       # FreeRTOS任务层 (主要工作目录)
+│   │       │
+│   │       ├── task_ws2812.cpp/h         # RGB指示灯任务 (优先级最低)
+│   │       │
+│   │       ├── task_jy61p.cpp/h          # JY61P姿态采集任务
+│   │       │   ├── 读取IMU数据
+│   │       │   ├── 解析四元数/欧拉角
+│   │       │   └── 提供 Get_Current_Yaw/Pitch/Roll() 接口
+│   │       │
+│   │       ├── task_motor_dm.cpp/h       # 达妙电机通信任务
+│   │       │   ├── CAN/串口通信
+│   │       │   ├── MIT模式指令封装
+│   │       │   └── 提供 Motor_DM_Set_Speed() 接口
+│   │       │
+│   │       ├── task_vofa.cpp/h           # VOFA上位机调试任务
+│   │       │   ├── 50Hz发送IMU数据到上位机
+│   │       │   ├── 解析命令: yaw=90#, pitch=30#, roll=15#
+│   │       │   ├── 调用 Set_Target_Yaw/Pitch/Roll() 接口
+│   │       │   └── 保留 q00/r00 等调试命令
+│   │       │
+│   │       ├── task_angle_control.cpp/h  # 角度控制任务 (核心)
+│   │       │   ├── 接收VOFA传来的目标角度
+│   │       │   ├── 读取JY61P当前角度
+│   │       │   ├── PID计算: 角度误差 → 目标速度
+│   │       │   ├── 处理偏航轴±180°环绕
+│   │       │   └── 调用 Motor_DM_Set_Speed() 执行
+│   │       │
+│   │       ├── task_balance_test.cpp/h   # 平衡测试任务 (备选/废弃)
+│   │       └── task_control_old.cpp/h    # 早期控制任务 (已废弃)
+│   │
+│   ├── CMakeLists.txt                    # CMake构建配置
+│   ├── CMakePresets.json                 # CMake预设
+│   ├── H7_test.ioc                       # STM32CubeMX配置
+│   ├── openocd.cfg                       # OpenOCD调试配置
+│   ├── startup_stm32h723xx.s             # 启动文件
+│   ├── STM32H723VGTX_RAM.ld              # RAM链接脚本
+│   ├── STM32H723XG_FLASH.ld              # FLASH链接脚本
+│   └── .mxproject                        # CubeMX项目文件
+│
+├── VOFA+/                                # VOFA+ 调试工具配置
+│   └── vofa+.cmds.json                   # VOFA+ 命令脚本 (yaw/pitch/roll)
+│
+├── README.md                             # 项目说明文档
+└── .gitignore                            # Git忽略配置
 ```
 
 ## 云台思路
@@ -87,13 +112,13 @@ motor_dm_task: MIT模式控制电机转动
 
 
 
-|    `yaw=数值#`    | **设定目标偏航角** | **例如 `yaw=90#` 让云台转到90度方向**                      |
-| :---------------: | :----------------: | ---------------------------------------------------------- |
-| **`pitch=数值#`** | **设定目标俯仰角** | **例如 `pitch=30#` 让云台上仰30度**                        |
-| **`roll=数值#`**  | **设定目标横滚角** | **例如 `roll=15#` 让云台侧倾15度**                         |
-|  **`kp=数值#`**   |    **设定kp值**    | **例如 `kp=1.0#` 让角度误差转换成目标速度的kp参数设为1.0** |
-|  **`ki=数值#`**   |    **设定ki值**    | **例如 `ki=2.8#` 让角度误差转换成目标速度的ki参数设为2.8** |
-|  **`kd=数值#`**   |    **设定kd值**    | **例如 `kp=3.5#` 让角度误差转换成目标速度的kd参数设为3.5** |
+| `yaw=数值#`       |           **例如 `yaw=90#` 让云台转到90度方向**            | **设定目标偏航角** |
+| ----------------- | :--------------------------------------------------------: | ------------------ |
+| **`pitch=数值#`** |            **例如 `pitch=30#` 让云台上仰30度**             | **设定目标俯仰角** |
+| **`roll=数值#`**  |             **例如 `roll=15#` 让云台侧倾15度**             | **设定目标横滚角** |
+| **`kp=数值#`**    | **例如 `kp=1.0#` 让角度误差转换成目标速度的kp参数设为1.0** | **设定kp值**       |
+| **`ki=数值#`**    | **例如 `ki=2.8#` 让角度误差转换成目标速度的ki参数设为2.8** | **设定ki值**       |
+| **`kd=数值#`**    | **例如 `kp=3.5#` 让角度误差转换成目标速度的kd参数设为3.5** | **设定kd值**       |
 
 
 
